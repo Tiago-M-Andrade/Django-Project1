@@ -80,27 +80,15 @@ class RegisterForm(forms.ModelForm):
                 'required': 'This field must not be empty',
             }
         }
-        widgets = {
-            'first_name': forms.TextInput(attrs={
-                'placeholder': 'Type your first name here',
-                'class': 'input text-input'
-            }),
-            'password': forms.PasswordInput(attrs={
-                'placeholder': 'Type your password here',
-            })
-        }
 
-    def clean_password(self):
-        data = self.cleaned_data.get('password')
+    def clean_email(self):
+        email = self.cleaned_data.get('email', '')
+        exists = User.objects.filter(email=email).exists()
 
-        if 'atenção' in data:
+        if exists:
             raise ValidationError(
-                'Não digite %(error)s no campo password',
-                code='invalid',
-                params={'error': 'atenção'}
-            )
-
-        return data
+                'User e-mail is already in use', code='invalid')
+        return email
 
     def clean(self):
         cleaned_data = super().clean()
