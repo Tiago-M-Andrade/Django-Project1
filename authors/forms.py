@@ -1,23 +1,12 @@
-import re
+from collections import defaultdict
 
 from django import forms
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 
-
-def add_placeholder(field, placeholder_val):
-    field.widget.attrs['placeholder'] = placeholder_val
-
-
-def strong_password(password):
-    regex = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,}$')
-
-    if not regex.match(password):
-        raise ValidationError(('Password must have at least one uppercase letter, '
-                               'one lowercase letter and one number. The length should be '
-                               'at least 8 characters.'),
-                              code='Indalid'
-                              )
+from base_templates.django_forms import (add_attr, add_placeholder,
+                                         strong_password)
+from recipes.models import Recipe
 
 
 class RegisterForm(forms.ModelForm):
@@ -99,3 +88,87 @@ class RegisterForm(forms.ModelForm):
             raise ValidationError({
                 'password2': 'Password and Password Confirm must match'
             })
+
+
+class LoginForm(forms.Form):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        add_placeholder(self.fields['username'], 'Your username')
+        add_placeholder(self.fields['password'], 'Your password')
+
+    username = forms.CharField()
+    password = forms.CharField(
+        widget=forms.PasswordInput()
+    )
+
+
+class AuthorRecipeForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._my_errors = defaultdict(list)
+
+        add_attr(self.fields.get('preparation_steps'), 'class', 'span-2')
+
+    class Meta:
+        model = Recipe
+        fields = 'title', 'description', 'preparation_time', \
+            'preparation_time_unit', 'servings', 'servings_unit', \
+            'preparation_steps', 'cover'
+        widgets = {
+            'cover': forms.FileInput(
+                attrs={
+                    'class': 'span-2'
+                }
+            ),
+            'servings_unit': forms.Select(
+                choices=(
+                    ('Portions', 'Portions'),
+                    ('Unit', 'Unit'),
+                    ('People', 'People'),
+                )
+            ),
+            'preparation_time_unit': forms.Select(
+                choices=(
+                    ('Minutes', 'Minutes'),
+                    ('Hours', 'Hours'),
+                )
+            )
+        }
+
+    def clean(self, *args, **kwargs):
+        super_clean = super().clean(*args, **kwargs)
+        cd = self.cleaned_data
+        title = cd.get('title')
+        description = cd.get('description')
+        preparation_time = cd.get('preparation_time')
+        servings = cd.get('servings')
+        preparation_steps = cd.get('preparation_steps')
+
+        if len(title) < 8:
+            self._my_errors['title'].append(
+                'The title must have at least 8 characters.')
+        if len(description) < 19:
+            self._my_errors['description'].append(
+                'The description must have at least 20 characters.')
+        try:
+            if preparation_time < 0:
+                self._my_errors['preparation_time'].append(
+                    'Preparation time cannot be negative.')
+        except BaseException:
+            self._my_errors['preparation_time'].append(
+                'Preparation time only accept whole numbers.')
+        try:
+            if servings < 0:
+                self._my_errors['servings'].append(
+                    'Servings cannot be negative.')
+        except BaseException:
+            self._my_errors['servings'].append(
+                'Servings only accept whole numbers.')
+        if len(preparation_steps) < 99:
+            self._my_errors['preparation_steps'].append(
+                'The preparation_steps must have at least 100 characters.')
+
+        if self._my_errors:
+            raise ValidationError(self._my_errors)
+        return super_clean
